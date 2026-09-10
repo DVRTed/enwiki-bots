@@ -127,14 +127,19 @@ async function generate_stats() {
 
 function format_wikitable(extended) {
   const rows = extended
-    .map(
-      ([pagename, total, todo, completed, inprogress, unnecessary]) =>
-        `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary}`
-    )
+    .map(([pagename, total, todo, completed, inprogress, unnecessary]) => {
+      const status =
+        todo === 0 && completed === 0 && inprogress === 0 && unnecessary === 0
+          ? "Unknown"
+          : todo > 0 || inprogress > 0
+            ? "Open"
+            : "Closed";
+      return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary} || ${status}`;
+    })
     .join("\n");
 
   return `{| class="wikitable sortable"
-! Page !! Total !! Todo !! Completed !! In progress !! Unnecessary
+! Page !! Total !! Todo !! Completed !! In progress !! Unnecessary !! Status
 ${rows}
 |}`;
 }
@@ -184,4 +189,3 @@ main().catch((err) => {
   console.error("Script failed:", err);
   process.exit(1);
 });
-
