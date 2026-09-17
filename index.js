@@ -126,22 +126,42 @@ async function generate_stats() {
 }
 
 function format_wikitable(extended) {
-  const rows = extended
-    .map(([pagename, total, todo, completed, inprogress, unnecessary]) => {
-      const status =
-        todo === 0 && completed === 0 && inprogress === 0 && unnecessary === 0
-          ? "Unknown"
-          : todo > 0 || inprogress > 0
-            ? "Open"
-            : "Closed";
-      return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary} || ${status}`;
-    })
-    .join("\n");
+  const active = [];
+  const closed = [];
+  const other = [];
 
-  return `{| class="wikitable sortable"
-! Page !! Total !! Todo !! Completed !! In progress !! Unnecessary !! Status
-${rows}
+  for (const entry of extended) {
+    const [, , todo, completed, inprogress, unnecessary] = entry;
+    if (todo > 0 || inprogress > 0) {
+      active.push(entry);
+    } else if (completed > 0 || unnecessary > 0) {
+      closed.push(entry);
+    } else {
+      other.push(entry);
+    }
+  }
+
+  const renderTable = (rows) => {
+    const rowContent = rows
+      .map(
+        ([pagename, total, todo, completed, inprogress, unnecessary]) => {
+
+          return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary}`
+        }
+      )
+      .join("\n");
+
+    return `{| class="wikitable sortable"
+! Page !! Total !! Todo !! Completed !! In progress !! Unnecessary
+${rowContent}
 |}`;
+  };
+
+  return [
+    `== Active cases ==\n${renderTable(active)}`,
+    `== Closed cases ==\n${renderTable(closed)}`,
+    `== Other cases ==\n${renderTable(other)}`,
+  ].join("\n\n");
 }
 
 async function save(overall, extended) {
