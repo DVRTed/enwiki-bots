@@ -53,6 +53,7 @@ async function generate_stats() {
     total_completed: 0,
     total_todo: 0,
     total_unnecessary: 0,
+    total_tagged: 0,
     total_in_progress: 0,
   };
 
@@ -80,6 +81,7 @@ async function generate_stats() {
     const counts = {
       completed: 0,
       unnecessary: 0,
+      tagged: 0,
       ongoing: 0,
       todo: 0,
       unknown: 0,
@@ -89,6 +91,7 @@ async function generate_stats() {
       const cls = $(el).attr("class") || "";
       if (cls.includes("aic-row-completed")) counts.completed++;
       else if (cls.includes("aic-row-unnecessary")) counts.unnecessary++;
+      else if (cls.includes("aic-row-tagged")) counts.tagged++;
       else if (cls.includes("aic-row-ongoing")) counts.ongoing++;
       else if (cls.includes("aic-row-todo")) counts.todo++;
       else counts.unknown++;
@@ -97,6 +100,7 @@ async function generate_stats() {
     const total =
       counts.completed +
       counts.unnecessary +
+      counts.tagged +
       counts.ongoing +
       counts.todo +
       counts.unknown;
@@ -109,6 +113,7 @@ async function generate_stats() {
     overall.total_completed += counts.completed;
     overall.total_todo += counts.todo;
     overall.total_unnecessary += counts.unnecessary;
+    overall.total_tagged += counts.tagged;
     overall.total_in_progress += counts.ongoing;
 
     const pagename = title.replace(/^(?:Wikipedia:)?AI noticeboard\//i, "");
@@ -119,6 +124,7 @@ async function generate_stats() {
       counts.completed,
       counts.ongoing,
       counts.unnecessary,
+      counts.tagged,
     ]);
   }
 
@@ -131,10 +137,10 @@ function format_wikitable(extended) {
   const other = [];
 
   for (const entry of extended) {
-    const [, , todo, completed, inprogress, unnecessary] = entry;
+    const [, , todo, completed, inprogress, unnecessary, tagged] = entry;
     if (todo > 0 || inprogress > 0) {
       active.push(entry);
-    } else if (completed > 0 || unnecessary > 0) {
+    } else if (completed > 0 || unnecessary > 0 || tagged > 0) {
       closed.push(entry);
     } else {
       other.push(entry);
@@ -144,15 +150,15 @@ function format_wikitable(extended) {
   const renderTable = (rows) => {
     const rowContent = rows
       .map(
-        ([pagename, total, todo, completed, inprogress, unnecessary]) => {
+        ([pagename, total, todo, completed, inprogress, unnecessary, tagged]) => {
 
-          return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary}`
+          return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary} || ${tagged}`
         }
       )
       .join("\n");
 
     return `{| class="wikitable sortable"
-! Page !! Total !! Todo !! Completed !! In progress !! Unnecessary
+! Page !! Total !! Todo !! Completed !! In progress !! Unnecessary !! Tagged
 ${rowContent}
 |}`;
   };
