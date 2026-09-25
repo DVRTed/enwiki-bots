@@ -1,7 +1,8 @@
 import "dotenv/config";
-import * as cheerio from "cheerio";
 import { writeFile } from "fs/promises";
 import { Mwn } from "mwn";
+
+const DRY_RUN = false;
 
 const ENDPOINT = "https://en.wikipedia.org/w/api.php";
 const UA = "AINBStats/1.0 (https://en.wikipedia.org/wiki/User:DVRTed)";
@@ -10,6 +11,22 @@ const PAGE_NS = "4";
 const STATS_PAGE = "User:DVRTed bot/AINB-stats.json";
 const EXTENDED_STATS_PAGE = "User:DVRTed bot/AINB-stats-extended.json";
 const EXTENDED_TABLE_PAGE = "User:DVRTed bot/AINB-stats-extended-table";
+
+const ROW_RE =
+  /\{\{AIC article row\s*\|\s*(?:article=)?\s*[^|}]*\s*(?:\|\s*(?:status=)?\s*(?<status>[^|}]*))?(?:\|\s*(?:notes=)?\s*(?<notes>[^}]*))?\}\}/gi;
+
+const STATUS_ALIASES = {
+  completed: ["completed", "c"],
+  ongoing: ["ongoing", "o"],
+  unnecessary: ["unnecessary", "unneeded", "u"],
+  tagged: ["tagged", "tag", "tg"],
+  requested: ["requested", "todo", "to do", "t", "td"],
+};
+
+const STATUS_LOOKUP = {};
+for (const [canonical, aliases] of Object.entries(STATUS_ALIASES)) {
+  for (const alias of aliases) STATUS_LOOKUP[alias] = canonical;
+}
 
 async function get_subpages() {
   const subpages = [];
@@ -42,9 +59,32 @@ async function get_subpages() {
   return subpages;
 }
 
+async function get_content(titles) {
+  const params = new URLSearchParams({
+    format: "json",
+    action: "query",
+    prop: "revisions",
+    rvprop: "content",
+    rvslots: "main",
+    titles: titles.join("|"),
+  });
+
+  const res = await fetch(`${ENDPOINT}?${params}`, {
+    headers: { "User-Agent": UA },
+  });
+  const data = await res.json();
+
+  const out = {};
+  for (const page of Object.values(data.query?.pages || {})) {
+    if (page.revisions?.length)
+      out[page.title] = page.revisions[0].slots.main["*"];
+  }
+  return out;
+}
+
 async function generate_stats() {
   const subpages = await get_subpages();
-  console.log(`Scanning ${subpages.length} subpages...`);
+  console.log(`Found ${subpages.length} subpages.`);
 
   const overall = {
     total_cases: 0,
@@ -59,73 +99,58 @@ async function generate_stats() {
 
   const extended = [];
 
-  for (let i = 0; i < subpages.length; i++) {
-    const title = subpages[i];
-    console.log(`[${i + 1}/${subpages.length}] ${title}`);
+  for (let i = 0; i < subpages.length; i += 50) {
+    const batch = subpages.slice(i, i + 50);
+    console.log(`Fetching ${i + 1}-${i + batch.length}/${subpages.length}...`);
+    const content = await get_content(batch);
 
-    const params = new URLSearchParams({
-      format: "json",
-      action: "parse",
-      page: title,
-      prop: "text",
-    });
-    const res = await fetch(`${ENDPOINT}?${params}`, {
-      headers: { "User-Agent": UA },
-    });
-    const data = await res.json();
+    for (const [title, wikitext] of Object.entries(content)) {
+      const counts = {
+        completed: 0,
+        unnecessary: 0,
+        tagged: 0,
+        ongoing: 0,
+        requested: 0,
+        unknown: 0,
+      };
 
-    const html = data.parse?.text?.["*"];
-    if (!html) continue;
+      for (const m of wikitext.matchAll(ROW_RE)) {
+        const status =
+          STATUS_LOOKUP[(m.groups.status || "").trim().toLowerCase()] ||
+          "unknown";
+        counts[status]++;
+      }
 
-    const $ = cheerio.load(html);
-    const counts = {
-      completed: 0,
-      unnecessary: 0,
-      tagged: 0,
-      ongoing: 0,
-      todo: 0,
-      unknown: 0,
-    };
+      const total =
+        counts.completed +
+        counts.unnecessary +
+        counts.tagged +
+        counts.ongoing +
+        counts.requested +
+        counts.unknown;
+      const is_active = counts.requested > 0 || counts.ongoing > 0;
 
-    $("tr[class*='aic-row-']").each((_, el) => {
-      const cls = $(el).attr("class") || "";
-      if (cls.includes("aic-row-completed")) counts.completed++;
-      else if (cls.includes("aic-row-unnecessary")) counts.unnecessary++;
-      else if (cls.includes("aic-row-tagged")) counts.tagged++;
-      else if (cls.includes("aic-row-ongoing")) counts.ongoing++;
-      else if (cls.includes("aic-row-todo")) counts.todo++;
-      else counts.unknown++;
-    });
+      overall.total_cases++;
+      if (is_active) overall.active_cases++;
+      else overall.closed_cases++;
 
-    const total =
-      counts.completed +
-      counts.unnecessary +
-      counts.tagged +
-      counts.ongoing +
-      counts.todo +
-      counts.unknown;
-    const is_active = counts.todo > 0 || counts.ongoing > 0;
+      overall.total_completed += counts.completed;
+      overall.total_todo += counts.requested;
+      overall.total_unnecessary += counts.unnecessary;
+      overall.total_tagged += counts.tagged;
+      overall.total_in_progress += counts.ongoing;
 
-    overall.total_cases++;
-    if (is_active) overall.active_cases++;
-    else overall.closed_cases++;
-
-    overall.total_completed += counts.completed;
-    overall.total_todo += counts.todo;
-    overall.total_unnecessary += counts.unnecessary;
-    overall.total_tagged += counts.tagged;
-    overall.total_in_progress += counts.ongoing;
-
-    const pagename = title.replace(/^(?:Wikipedia:)?AI noticeboard\//i, "");
-    extended.push([
-      pagename,
-      total,
-      counts.todo,
-      counts.completed,
-      counts.ongoing,
-      counts.unnecessary,
-      counts.tagged,
-    ]);
+      const pagename = title.replace(/^(?:Wikipedia:)?AI noticeboard\//i, "");
+      extended.push([
+        pagename,
+        total,
+        counts.requested,
+        counts.completed,
+        counts.ongoing,
+        counts.unnecessary,
+        counts.tagged,
+      ]);
+    }
   }
 
   return { overall, extended };
@@ -150,10 +175,17 @@ function format_wikitable(extended) {
   const renderTable = (rows) => {
     const rowContent = rows
       .map(
-        ([pagename, total, todo, completed, inprogress, unnecessary, tagged]) => {
-
-          return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary} || ${tagged}`
-        }
+        ([
+          pagename,
+          total,
+          todo,
+          completed,
+          inprogress,
+          unnecessary,
+          tagged,
+        ]) => {
+          return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary} || ${tagged}`;
+        },
       )
       .join("\n");
 
@@ -177,6 +209,8 @@ async function save(overall, extended) {
   await writeFile("AINB-stats.json", overall_json);
   await writeFile("AINB-stats-extended.json", extended_json);
   console.log("saved stats to local files.");
+
+  if (DRY_RUN) return;
 
   const bot = await Mwn.init({
     apiUrl: ENDPOINT,
