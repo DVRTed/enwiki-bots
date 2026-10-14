@@ -40,6 +40,7 @@ async function get_subpages() {
       apnamespace: PAGE_NS,
       apprefix: PAGE,
       aplimit: "500",
+      apfilterredir: "nonredirects",
     });
     if (apcontinue) params.set("apcontinue", apcontinue);
 
