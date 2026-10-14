@@ -49,9 +49,7 @@ async function get_subpages() {
     const data = await res.json();
 
     for (const page of data.query?.allpages || []) {
-      if (/\/\d{4}-\d{2}-\d{2}[ _]/.test(page.title)) {
-        subpages.push(page.title);
-      }
+      subpages.push(page.title);
     }
     apcontinue = data.continue?.apcontinue;
   } while (apcontinue);
