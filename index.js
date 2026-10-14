@@ -49,11 +49,19 @@ async function get_subpages() {
     const data = await res.json();
 
     for (const page of data.query?.allpages || []) {
-      subpages.push(page.title);
+      // match "/AINB" and other pages inside it
+      // match "Archive" and "Archive N"
+      // match "Backlog bonanza" at the start, e.g., match "Backlog bonanza (SPI edition)"
+      const match =
+        /\/(?:AINB(?:\/|)|Archive(?:\s\d*$|)$|Backlog bonanza)/i.test(
+          page.title,
+        );
+      if (!match) {
+        subpages.push(page.title);
+      }
     }
     apcontinue = data.continue?.apcontinue;
   } while (apcontinue);
-
   return subpages;
 }
 
