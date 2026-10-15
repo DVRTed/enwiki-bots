@@ -118,14 +118,22 @@ async function generate_stats() {
         tagged: 0,
         ongoing: 0,
         requested: 0,
-        unknown: 0,
       };
 
-      for (const m of wikitext.matchAll(ROW_RE)) {
-        const status =
-          STATUS_LOOKUP[(m.groups.status || "").trim().toLowerCase()] ||
-          "unknown";
-        counts[status]++;
+      // check if the content has the AIC templates, excl commented out
+      const uncommented_section = wikitext.replace(/<!--[\s\S]*?-->/g, "");
+
+      const list_match = /\{\{AIC article list\s*\|/i.exec(uncommented_section);
+      const has_row = /\{\{AIC article row/i.test(uncommented_section);
+
+      if (list_match && has_row) {
+        for (const m of wikitext.matchAll(ROW_RE)) {
+          const status =
+            STATUS_LOOKUP[(m.groups.status || "").trim().toLowerCase()] ||
+            "unknown";
+
+          if (status !== "unknown") counts[status]++;
+        }
       }
 
       const total =
@@ -133,8 +141,7 @@ async function generate_stats() {
         counts.unnecessary +
         counts.tagged +
         counts.ongoing +
-        counts.requested +
-        counts.unknown;
+        counts.requested;
       const is_active = counts.requested > 0 || counts.ongoing > 0;
 
       overall.total_cases++;
@@ -212,9 +219,12 @@ ${rowContent}
 async function save(overall, extended) {
   const overall_json = JSON.stringify(overall);
   const extended_json = JSON.stringify(extended);
+  const extended_wikitable = format_wikitable(extended);
 
   await writeFile("AINB-stats.json", overall_json);
   await writeFile("AINB-stats-extended.json", extended_json);
+  await writeFile("AINB-stats-extended-wikitable.txt", extended_wikitable);
+
   console.log("saved stats to local files.");
 
   if (DRY_RUN) return;
@@ -239,7 +249,7 @@ async function save(overall, extended) {
   console.log(`Saved to ${EXTENDED_STATS_PAGE}`);
 
   await bot.edit(EXTENDED_TABLE_PAGE, () => ({
-    text: format_wikitable(extended),
+    text: extended_wikitable,
     summary: "Updating AINB extended stats table (automated)",
   }));
   console.log(`Saved to ${EXTENDED_TABLE_PAGE}`);
