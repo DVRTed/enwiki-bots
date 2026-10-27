@@ -189,22 +189,38 @@ function format_wikitable(extended) {
   const renderTable = (rows) => {
     const rowContent = rows
       .map(
-        ([
-          pagename,
-          total,
-          todo,
-          completed,
-          inprogress,
-          unnecessary,
-          tagged,
-        ]) => {
-          return `|-\n| [[Wikipedia:AI noticeboard/${pagename}|${pagename}]] || ${total} || ${todo} || ${completed} || ${inprogress} || ${unnecessary} || ${tagged}`;
+        (
+          [pagename, total, todo, completed, inprogress, unnecessary, tagged],
+          index,
+        ) => {
+          const cells = [
+            index + 1,
+            `[[Wikipedia:AI noticeboard/${pagename}|${pagename}]]`,
+            total,
+            todo,
+            completed,
+            inprogress,
+            unnecessary,
+            tagged,
+          ];
+          return `|-\n| ${cells.join(" || ")}`;
         },
       )
       .join("\n");
 
+    const headers = [
+      "#",
+      "Page",
+      "Total",
+      "Todo",
+      "Completed",
+      "In progress",
+      "Unnecessary",
+      "Tagged",
+    ];
+
     return `{| class="wikitable sortable"
-! Page !! Total !! Todo !! Completed !! In progress !! Unnecessary !! Tagged
+! ${headers.join(" !! ")}
 ${rowContent}
 |}`;
   };
