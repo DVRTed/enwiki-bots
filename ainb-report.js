@@ -111,7 +111,7 @@ function format_wikitable(rows) {
       return `|-\n| ${cells.join(" || ")}`;
     })
     .join("\n");
-  let wikitext = `{{Purge box}}\n\nLast updated: ~~~~~ ({{Time ago|~~~~~}}) \n\n=="Inactive" users editing==\n\n`;
+  let wikitext = `\n=="Inactive" users editing==\n\n`;
   wikitext += `Users who have edited in mainspace since their conduct status was marked "Inactive". This is based on [[:${CATEGORY}]].
 
 {| class="wikitable sortable"
